@@ -15,7 +15,6 @@ default_args = {
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 0,
-    
     #'retry_delay': timedelta(minutes=5),
 }
 
@@ -79,21 +78,22 @@ def store_data(**kwargs):
     # Load the DataFrame into Snowflake using the NERGE command
 
      # Get the exchange rate from the previous task using XCom
-    ti = kwargs['ti']
-    exchange_rate = ti.xcom_pull(task_ids='get_exchange_rate', key='exchange_rate')
-    exchange_date = ti.xcom_pull(task_ids='get_exchange_rate', key='exchange_date')
+    ti = kwargs['task_instance']
+    rate_values = ti.xcom_pull(task_ids='get_exchange_rate')
+    exchange_rate = rate_values.get('exchange_rate')
+    exchange_date = rate_values.get('exchange_date')
 
     upsert_sql = f'''
         MERGE INTO exchange_rate AS tgt
-        USING (SELECT {exchange_date} AS rate_date)
-        ON tgt.RATE_DATE = rate_date
+        USING (SELECT '{exchange_date}' AS scr_rate_date)
+        ON tgt.RATE_DATE = scr_rate_date
         WHEN MATCHED THEN
             UPDATE SET RATE = {exchange_rate}, UPDATE_AT = CURRENT_TIMESTAMP()
         WHEN NOT MATCHED THEN
-            INSERT (RATE, RATE_DATE) VALUES ({exchange_rate}, {exchange_date});'''
+            INSERT (RATE, RATE_DATE) VALUES ({exchange_rate}, '{exchange_date}');'''
     
     # Push the data to Snowflake using the SnowflakeHook
-    hook = SnowflakeHook(snowflake_conn_id='snowflake_conn')
+    hook = SnowflakeHook(snowflake_conn_id='snowflake_connector')
     conn = hook.get_conn()
     cursor = conn.cursor()
     cursor.execute(upsert_sql)
