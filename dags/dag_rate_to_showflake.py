@@ -3,7 +3,6 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
-from datetime import datetime
 import requests
 import logging
 
@@ -28,20 +27,11 @@ dag = DAG(
 )
 
 
-create_table_sql = '''
-        CREATE TABLE IF NOT EXISTS exchange_rate (
-            RATE NUMERIC(12, 8) NOT NULL, 
-            RATE_DATE DATE NOT NULL,
-            CREATED_AT TIMESTAMP_LTZ(9) DEFAULT CURRENT_TIMESTAMP() NOT NULL,
-            UPDATE_AT TIMESTAMP_LTZ(9)
-        )
-    '''
-
 # Define the task to get the exchange rate
-def get_exchange_rate_task():
+def get_exchange_rate_task(exec_date):
     try:
         # Call the get_exchange_rate function from get_rate_modules.py
-        exchange_rate, exchange_date = get_exchange_rate()
+        exchange_rate, exchange_date = get_exchange_rate(exec_date)
 
         if exchange_rate is None:
             raise ValueError('Exchange rate is None')
@@ -60,10 +50,9 @@ def get_exchange_rate_task():
 
 
 # Create the table in Snowflake if it doesn't exist
-def create_table():
-    # rate_date with no time elements
-    # created_at and update_at without a timezone,  UTC time
-    create_table_sql = '''
+# rate_date with no time elements
+# created_at and update_at without a timezone,  UTC time
+create_table_sql = '''
         CREATE TABLE IF NOT EXISTS exchange_rate (
             RATE NUMERIC(12, 8) NOT NULL, 
             RATE_DATE DATE NOT NULL,
@@ -71,9 +60,8 @@ def create_table():
             UPDATE_AT TIMESTAMP_LTZ(9)
         )
     '''
-    return create_table_sql
-   
 
+# Define the task to store the data in Snowflake
 def store_data(**kwargs):
     # Load the DataFrame into Snowflake using the NERGE command
 
@@ -93,7 +81,7 @@ def store_data(**kwargs):
             INSERT (RATE, RATE_DATE) VALUES ({exchange_rate}, '{exchange_date}');'''
     
     # Push the data to Snowflake using the SnowflakeHook
-    hook = SnowflakeHook(snowflake_conn_id='snowflake_connector')
+    hook = SnowflakeHook(snowflake_conn_id='snowflake_conn')
     conn = hook.get_conn()
     cursor = conn.cursor()
     cursor.execute(upsert_sql)
@@ -103,7 +91,7 @@ def store_data(**kwargs):
     
 
 # we can extand with If-None-Match header to take cached data
-def get_exchange_rate():
+def get_exchange_rate(exec_date):
     """Fetches the latest exchange rate from EUR to the target currency."""
     # we use FREE subscription plan, so we can only use EUR as base currency
     # EUR exchange rate is always 1
@@ -111,9 +99,11 @@ def get_exchange_rate():
 
     # historical data format YYYY-MM-DD
     # Get the current date
-    current_date = datetime.now().date()
+    # current_date = datetime.now().date()
     # Format the date as YYYY-MM-DD
-    endpoint = current_date.strftime('%Y-%m-%d')
+    # endpoint = current_date.strftime('%Y-%m-%d')
+    endpoint = exec_date[:10]
+    print(f'555555 {endpoint}') 
 
     # we can extand with If-None-Match header to take cached data
     base_url = f"http://api.exchangeratesapi.io/v1/{endpoint}?access_key=f83d838e5f73a39ec92d7365f594afb3" 
@@ -161,20 +151,21 @@ with dag:
         task_id='get_exchange_rate',
         python_callable=get_exchange_rate_task,
         provide_context=True,
+        op_args=['{{ logical_date }}']
     )
 
     # Task to create the table in Snowflake
     create_table_operator = SnowflakeOperator(
          task_id="create_table",
          sql=create_table_sql,
-         snowflake_conn_id="snowflake_connector",
+         snowflake_conn_id="snowflake_conn",
     )
 
     # Task to store the data in Snowflake
-    store_data = PythonOperator(
+    store_data_operator = PythonOperator(
         task_id='get_guery_to_store_data', 
         python_callable=store_data
     )
 
     # Set task dependencies
-    get_exchange_rate_operator >> create_table_operator >> store_data
+    get_exchange_rate_operator >> create_table_operator >> store_data_operator
