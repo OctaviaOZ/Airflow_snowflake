@@ -23,7 +23,7 @@ dag = DAG(
     'rate_to_showflake',
     default_args=default_args,
     description='Rate GBT from EUR once a day',
-    schedule_interval=timedelta(days=1),
+    schedule_interval=timedelta(days=1), # schedule_interval='0 0 * * *',
 )
 
 
@@ -103,12 +103,10 @@ def get_exchange_rate(exec_date):
     # Format the date as YYYY-MM-DD
     # endpoint = current_date.strftime('%Y-%m-%d')
     endpoint = exec_date[:10]
-    print(f'555555 {endpoint}') 
-
+   
     # we can extand with If-None-Match header to take cached data
     base_url = f"http://api.exchangeratesapi.io/v1/{endpoint}?access_key=f83d838e5f73a39ec92d7365f594afb3" 
     
-   
     # Prepare the query parameters for the API request
     # specific target currencies included in the request
     params = {
