@@ -1,1 +1,31 @@
-openai/
+# Airflow log files
+logs/dag_id=*/
+logs/dag_processor_manager/
+logs/scheduler/
+
+snowflake_config.json
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+
+# Virtual environment
+venv/
+env/
+.venv/
+.env
+
+# Other
+.DS_Store
+.idea/
+.vscode/
+logs/
+sample_code/

@@ -1,7 +1,10 @@
+# Task
+● Pull data from an exchange rate API. The public API that provides exchange rate data (https://exchangeratesapi.io/). 
+The API provides exchange rates (from GBP to EUR) along with the corresponding date.
+● The pulled data are storing in a Snowflake table. The table stores date and exchange rate information. 
+
 ## Prerequisites
 
-- Git
-- Docker
 - Docker Compose
 
 ## Instructions
